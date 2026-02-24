@@ -134,10 +134,23 @@ After creating and validating the app, you MUST test it in OpenBB Workspace:
    - Click on the app card to open it
    - Take a final screenshot showing the app rendered in the workspace
 
-6. **SUCCESS MESSAGE (REQUIRED):**
-   - Output a clear streaming text message (NOT as reasoning/artifact)
-   - Format: "✅ **App Created Successfully!**\n\nYour app `<app-name>` has been created and connected to OpenBB Workspace.\n\n**Location:** `apps/<app-directory>/`\n**Endpoint:** `http://localhost:8001`\n\nThe app is now visible in your workspace above."
-   - This message should be the final text output to the user
+6. **SUCCESS MESSAGE (CRITICAL - DO NOT SKIP):**
+   - After all browser automation is complete, you MUST output a final text message
+   - This message MUST be plain text output (not a tool call, not reasoning, not in a file)
+   - Format exactly like this:
+
+   ✅ **App Created Successfully!**
+
+   Your app `<app-name>` has been created and connected to OpenBB Workspace.
+
+   **Location:** `apps/<app-directory>/`
+   **Endpoint:** `http://localhost:8001`
+
+   The app is now visible in your workspace above.
+
+   - This message MUST be your final output before the session ends
+   - DO NOT end the session without outputting this message
+   - The user will NOT see the app unless you output this message
 
 **IMPORTANT:** Always use port 8001 for testing to avoid conflicts.
 

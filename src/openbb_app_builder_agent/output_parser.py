@@ -85,6 +85,51 @@ def format_tool_message(tool_name: str, tool_input: dict[str, Any]) -> str:
             return f"Spawning agent: {description}"
         return "Spawning sub-agent"
 
+    # Chrome MCP tools (browser automation)
+    if name_lower.startswith("mcp__claude-in-chrome__"):
+        action_name = name_lower.replace("mcp__claude-in-chrome__", "")
+
+        if action_name == "computer":
+            action = tool_input.get("action", "")
+            if action == "screenshot":
+                return "Taking screenshot"
+            elif action == "left_click":
+                return "Clicking element"
+            elif action == "type":
+                text = tool_input.get("text", "")
+                short_text = text[:30] + "..." if len(text) > 30 else text
+                return f"Typing: {short_text}"
+            elif action == "scroll":
+                direction = tool_input.get("scroll_direction", "")
+                return f"Scrolling {direction}"
+            return f"Browser action: {action}"
+
+        if action_name == "navigate":
+            url = tool_input.get("url", "")
+            short_url = url[:50] + "..." if len(url) > 50 else url
+            return f"Navigating to: {short_url}"
+
+        if action_name == "read_page":
+            return "Reading page content"
+
+        if action_name == "find":
+            query = tool_input.get("query", "")
+            return f"Finding element: {query}"
+
+        if action_name == "form_input":
+            return "Filling form field"
+
+        if action_name == "tabs_context_mcp":
+            return "Getting browser tabs"
+
+        if action_name == "tabs_create_mcp":
+            return "Creating new browser tab"
+
+        if action_name == "get_page_text":
+            return "Extracting page text"
+
+        return f"Browser: {action_name}"
+
     # Todo tools
     if name_lower == "todowrite":
         todos = tool_input.get("todos", [])
@@ -221,6 +266,13 @@ def parse_claude_event(event: dict[str, Any]) -> Generator[ParsedEvent, None, No
         result_text = event.get("result", "")
         is_error = event.get("is_error", False)
 
+        logger.info(
+            f"Received result event: is_error={is_error}, "
+            f"result_length={len(result_text) if result_text else 0}"
+        )
+        if result_text:
+            logger.debug(f"Result text preview: {result_text[:200]}...")
+
         if is_error:
             yield ParsedEvent(
                 event_type="reasoning_step",
@@ -237,9 +289,29 @@ def parse_claude_event(event: dict[str, Any]) -> Generator[ParsedEvent, None, No
                     event_type="message_chunk",
                     data=message_chunk(f"\n\n**Error:**\n{result_text}").model_dump(),
                 )
-        elif result_text:
-            # Emit final result text as message chunk
+        else:
+            # Always emit completion message
             yield ParsedEvent(
-                event_type="message_chunk",
-                data=message_chunk(result_text).model_dump(),
+                event_type="reasoning_step",
+                data=reasoning_step(
+                    event_type="INFO",
+                    message="Claude Code completed successfully",
+                    details={"result_length": len(result_text) if result_text else 0},
+                ).model_dump(),
             )
+            if result_text:
+                # Emit final result text as message chunk
+                logger.info(f"Emitting final result text ({len(result_text)} chars)")
+                yield ParsedEvent(
+                    event_type="message_chunk",
+                    data=message_chunk(result_text).model_dump(),
+                )
+            else:
+                # No result text - emit a generic completion message
+                logger.warning("No result text received from Claude Code")
+                yield ParsedEvent(
+                    event_type="message_chunk",
+                    data=message_chunk(
+                        "\n\n✅ **Task completed.** Check the workspace to see the results."
+                    ).model_dump(),
+                )
