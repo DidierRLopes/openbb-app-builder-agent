@@ -1,46 +1,139 @@
-# openbb-app-builder-agent
+# OpenBB App Builder Agent
 
-A dedicated OpenBB Copilot agent for building OpenBB Workspace apps using a local Claude Code instance and repo-local `.claude` skills (especially an app-builder skill).
+A FastAPI agent that bridges OpenBB Copilot with Claude Code CLI, enabling AI-powered generation of OpenBB Workspace backend apps.
 
-## Goal
+## Features
 
-This repository will host a minimal but reliable agent that:
+- Receives requirements from OpenBB Copilot UI
+- Extracts widget context and tool-result data from requests
+- Invokes Claude Code CLI to build complete FastAPI backends
+- Streams progress and results back to OpenBB Workspace
+- Creates timestamped app directories with conversation logs
 
-1. Receives requirements/specs from OpenBB Copilot (the UI)
-2. Reads selected widget context and tool-result data from the OpenBB request payload
-3. Persists that context for reproducible local runs
-4. Invokes Claude Code CLI (or similar) in a target workspace repo
-5. Guides Claude to build an OpenBB Workspace backend app inspired by `getting-started/reference-backend`
-6. Runs validation scripts and reports progress/results back via streaming responses
+## Prerequisites
 
-## Status
+- Python 3.11+
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+- A target repository for generated apps (e.g., `backend-examples-for-openbb-workspace`)
 
-Planning scaffold only. See `ROADMAP.md` and `docs/PHASE_TEST_MATRIX.md` for the implementation plan and validation criteria.
+## Installation
 
-## Key External References
+```bash
+# Clone the repository
+git clone https://github.com/OpenBB-finance/openbb-app-builder-agent.git
+cd openbb-app-builder-agent
 
-- `../backend-examples-for-openbb-workspace` (target app patterns, validators, local `.claude` skills)
-- `../agents-for-openbb` (OpenBB agent examples, Claude CLI streaming agent example)
+# Install dependencies
+poetry install
+```
 
-## Planned Architecture (High Level)
+## Configuration
 
-- `FastAPI` service exposing OpenBB agent endpoints (`/agents.json`, `/health`, `/v1/query`)
-- OpenBB request normalizer (messages, widgets, tool outputs)
-- Session store (`.agent_sessions/<session_id>/...`) for prompt context + generated artifacts
-- Claude Code subprocess runner (`claude --output-format stream-json`)
-- SSE event parser -> OpenBB-compatible streaming events
-- Build workflow orchestrator (spec -> plan -> build -> validate)
+Set the target repository path where apps will be created:
 
-## Repository Layout
+```bash
+export OPENBB_APP_BUILDER_TARGET_REPO_PATH=/path/to/backend-examples-for-openbb-workspace
+```
 
-- `ROADMAP.md`: Full implementation roadmap (milestones, tasks, risks, acceptance criteria)
-- `docs/PHASE_TEST_MATRIX.md`: Phase-by-phase test checklist (implementation + builder workflow phases)
-- `docs/ARCHITECTURE.md`: Initial architecture and data flow contracts
-- `src/openbb_app_builder_agent/`: Code (stub for now)
-- `tests/`: Smoke tests for initial scaffold
+Optional environment variables:
+- `OPENBB_APP_BUILDER_HOST` - Server host (default: `0.0.0.0`)
+- `OPENBB_APP_BUILDER_PORT` - Server port (default: `7777`)
+- `OPENBB_APP_BUILDER_LOG_LEVEL` - Log level (default: `INFO`)
 
-## Next Steps
+## Running the Agent
 
-1. Implement Phase 0 and Phase 1 from `ROADMAP.md`
-2. Add OpenBB `QueryRequest` parsing fixtures from `../agents-for-openbb/testing/test_payloads`
-3. Wire Claude subprocess runner with target working directory set to the app-builder workspace repo
+```bash
+poetry run python -m openbb_app_builder_agent.main
+```
+
+The agent will start on `http://localhost:7777` (or configured port).
+
+## Connecting to OpenBB Workspace
+
+### Step 1: Connect the Agent (AI Tab)
+
+The App Builder Agent is an **agent** (not a widget backend), so connect it via the AI interface:
+
+1. Go to [OpenBB Workspace](https://pro.openbb.co)
+2. Navigate to **AI** in the sidebar
+3. Add the agent URL: `http://localhost:7777`
+4. The agent will appear as "OpenBB App Builder Agent"
+
+### Step 2: Create Apps via Copilot
+
+1. Open Copilot in OpenBB Workspace
+2. Select the App Builder Agent
+3. Describe the app you want to build (optionally select widgets for context)
+4. The agent will create the app in your target repository
+
+### Step 3: Test Created Apps (Connections Page)
+
+Apps created by the agent are standard widget backends:
+
+1. Run the created app:
+   ```bash
+   cd /path/to/target-repo/apps/my-app_20250223_1430
+   pip install -r requirements.txt
+   uvicorn main:app --host 0.0.0.0 --port 8000
+   ```
+
+2. Connect in OpenBB Workspace:
+   - Go to **Connections** page
+   - Click **Connect Backend**
+   - Enter name and URL (e.g., `http://localhost:8000`)
+   - Click **Test**, then **Add**
+
+3. Open the app from the **Apps** page to verify widgets render correctly
+
+## Generated App Structure
+
+Each created app includes:
+
+```
+apps/my-app_20250223_1430/
+├── main.py           # FastAPI app with widget endpoints
+├── widgets.json      # Widget definitions
+├── apps.json         # App metadata
+├── requirements.txt  # Python dependencies
+└── CONVERSATION.md   # Build log documenting the creation
+```
+
+## API Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /health` | Health check with dependency status |
+| `GET /agents.json` | Agent configuration for OpenBB discovery |
+| `POST /v1/query` | Process queries from OpenBB Copilot |
+| `POST /v1/terminate` | Terminate running Claude process |
+| `POST /v1/clear-sessions` | Clear session tracking data |
+| `GET /v1/sessions` | List active sessions (debug) |
+
+## Development
+
+```bash
+# Run tests
+poetry run pytest -v
+
+# Run with auto-reload (development only)
+poetry run uvicorn openbb_app_builder_agent.main:app --reload
+```
+
+## Architecture
+
+```
+┌─────────────────┐     ┌──────────────────────┐     ┌─────────────┐
+│  OpenBB Copilot │────▶│  App Builder Agent   │────▶│ Claude Code │
+│       UI        │◀────│   (FastAPI + SSE)    │◀────│    CLI      │
+└─────────────────┘     └──────────────────────┘     └─────────────┘
+                                   │
+                                   ▼
+                        ┌──────────────────────┐
+                        │   Target Repository  │
+                        │  (Generated Apps)    │
+                        └──────────────────────┘
+```
+
+## License
+
+MIT
