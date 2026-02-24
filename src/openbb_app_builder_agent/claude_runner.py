@@ -74,17 +74,23 @@ async def run_claude_code(
         "--output-format",
         "stream-json",
         "--verbose",
+        "--chrome",  # Enable Chrome browser integration MCP
     ]
 
     if config.skip_permissions:
         cmd.append("--dangerously-skip-permissions")
 
-    cmd.extend(["--session-id", session.session_id])
-
     if session.is_continued:
-        cmd.append("--continue")
+        # Continue existing session - use --continue with --resume
+        cmd.extend(["--resume", session.session_id])
+    else:
+        # New session - just set the session ID
+        cmd.extend(["--session-id", session.session_id])
 
     cmd.append(prompt)
+
+    logger.info(f"Starting Claude Code: cwd={cwd}, session={session.session_id}")
+    logger.debug(f"Command: {' '.join(cmd[:5])}...")  # Log first 5 args
 
     yield ParsedEvent(
         event_type="reasoning_step",
@@ -107,6 +113,7 @@ async def run_claude_code(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=cwd,
+            limit=10 * 1024 * 1024,  # 10MB buffer limit for large outputs (screenshots)
         )
 
         session_manager.set_current_process(process, session.session_id)
@@ -121,15 +128,23 @@ async def run_claude_code(
 
         stderr_task = asyncio.create_task(read_stderr())
 
+        logger.info(f"Claude Code process started with PID {process.pid}")
+
         if process.stdout:
+            line_count = 0
             async for line in process.stdout:
                 if not line:
                     continue
 
+                line_count += 1
                 try:
                     line_str = line.decode("utf-8").strip()
                     if not line_str:
                         continue
+
+                    # Log every 10th line to track progress
+                    if line_count % 10 == 0:
+                        logger.debug(f"Processed {line_count} lines from Claude Code")
 
                     event = json.loads(line_str)
 
@@ -137,12 +152,13 @@ async def run_claude_code(
                         yield parsed_event
 
                 except json.JSONDecodeError:
+                    logger.debug(f"Non-JSON line: {line[:100]}...")
                     yield ParsedEvent(
                         event_type="message_chunk",
                         data=message_chunk(line.decode("utf-8")).model_dump(),
                     )
                 except Exception as e:
-                    logger.error(f"Parse error: {e}")
+                    logger.error(f"Parse error on line {line_count}: {e}")
                     yield ParsedEvent(
                         event_type="reasoning_step",
                         data=reasoning_step(
@@ -151,6 +167,8 @@ async def run_claude_code(
                             details={"error": str(e)[:200]},
                         ).model_dump(),
                     )
+
+            logger.info(f"Claude Code output complete: {line_count} lines processed")
 
         try:
             await asyncio.wait_for(process.wait(), timeout=config.timeout)
@@ -241,6 +259,15 @@ async def run_claude_code(
                 event_type="ERROR",
                 message="Unexpected error",
                 details={"error": str(e)[:500]},
+            ).model_dump(),
+        )
+        # Also emit a user-friendly message
+        yield ParsedEvent(
+            event_type="message_chunk",
+            data=message_chunk(
+                f"\n\n**Error:** An unexpected error occurred: {str(e)[:200]}\n\n"
+                "This may be due to a tool or MCP server not being available. "
+                "Please try again or check the server logs."
             ).model_dump(),
         )
     finally:

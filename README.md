@@ -115,9 +115,14 @@ apps/my-app_20250223_1430/
 # Run tests
 poetry run pytest -v
 
-# Run with auto-reload (development only)
-poetry run uvicorn openbb_app_builder_agent.main:app --reload
+# Run the agent (RECOMMENDED)
+./run.sh
+
+# Or run directly
+poetry run python -m openbb_app_builder_agent.main
 ```
+
+**Warning:** Do NOT use `uvicorn --reload` - it will restart when Claude creates `.py` files in `apps/`, interrupting the generation process. Use `./run.sh` instead.
 
 ## Architecture
 
