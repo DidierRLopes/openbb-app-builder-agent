@@ -1,6 +1,10 @@
 # OpenBB App Builder Agent
 
+Demo here: [https://www.youtube.com/watch?v=zduIA_wmSEk](https://www.youtube.com/watch?v=zduIA_wmSEk)
+
 A FastAPI agent that bridges OpenBB Copilot with Claude Code CLI, enabling AI-powered generation of OpenBB Workspace backend apps.
+
+<img width="616" height="239" alt="CleanShot 2026-02-25 at 11 09 53" src="https://github.com/user-attachments/assets/f694396b-399e-4216-946f-59c14e0a6b74" />
 
 ## Features
 
