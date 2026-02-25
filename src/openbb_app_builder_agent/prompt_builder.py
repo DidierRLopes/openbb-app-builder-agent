@@ -134,23 +134,47 @@ After creating and validating the app, you MUST test it in OpenBB Workspace:
    - Click on the app card to open it
    - Take a final screenshot showing the app rendered in the workspace
 
-6. **SUCCESS MESSAGE (CRITICAL - DO NOT SKIP):**
-   - After all browser automation is complete, you MUST output a final text message
+6. **FINAL STATUS MESSAGE (CRITICAL - DO NOT SKIP):**
+   - After all browser automation is complete, you MUST analyze what you observed and output a final text message
    - This message MUST be plain text output (not a tool call, not reasoning, not in a file)
-   - Format exactly like this:
+   - Review the screenshots you took and assess the app quality
 
+   **If everything looks good:**
+   ```
    ✅ **App Created Successfully!**
 
-   Your app `<app-name>` has been created and connected to OpenBB Workspace.
+   Your app `<app-name>` has been created and is running in OpenBB Workspace.
 
    **Location:** `apps/<app-directory>/`
    **Endpoint:** `http://localhost:8001`
+   ```
 
-   The app is now visible in your workspace above.
+   **If you notice issues, report them with suggestions:**
+   ```
+   ⚠️ **App Created with Issues**
+
+   Your app `<app-name>` has been created but I noticed some issues:
+
+   - **Issue 1:** [Description] → **Suggestion:** [How to fix]
+   - **Issue 2:** [Description] → **Suggestion:** [How to fix]
+
+   **Location:** `apps/<app-directory>/`
+   **Endpoint:** `http://localhost:8001`
+   ```
+
+   **Common issues to check for:**
+   - Widget not rendering correctly (wrong widget type, missing data)
+   - App thumbnail not showing (check apps.json img field or widget preview)
+   - Chart not displaying data (check data format, column types)
+   - Table columns misaligned or showing wrong types
+   - Markdown not rendering (check content format)
+   - Layout issues (widgets overlapping, wrong grid positions)
+   - Data errors (API returning errors, empty data)
+   - Missing widgets (widget defined but not appearing)
 
    - This message MUST be your final output before the session ends
    - DO NOT end the session without outputting this message
-   - The user will NOT see the app unless you output this message
+   - Be honest about issues - the user needs to know what to fix
 
 **IMPORTANT:** Always use port 8001 for testing to avoid conflicts.
 
