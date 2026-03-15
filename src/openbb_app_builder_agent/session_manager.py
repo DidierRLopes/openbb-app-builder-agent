@@ -2,8 +2,11 @@
 
 import asyncio
 import json
+import logging
 import uuid
 from dataclasses import dataclass, field
+
+logger = logging.getLogger(__name__)
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
@@ -17,11 +20,11 @@ class Session:
 
     session_id: str
     openbb_conversation_id: Optional[str] = None
+    opencode_session_id: Optional[str] = None
     is_continued: bool = False
     created_at: datetime = field(default_factory=datetime.utcnow)
     last_active: datetime = field(default_factory=datetime.utcnow)
 
-    # Session directory for persisted files
     _session_dir: Optional[Path] = field(default=None, repr=False)
 
     @property
@@ -50,18 +53,14 @@ class SessionManager:
     - Session directory management for persisted context
     - Single-process execution lock (MVP constraint)
     - Process termination support
+    - OpenCode native session ID tracking
     """
 
     def __init__(self):
-        # Maps OpenBB conversation ID to session
         self._sessions: dict[str, Session] = {}
-        # Maps session ID to session (for direct lookup)
         self._sessions_by_id: dict[str, Session] = {}
-        # Lock for concurrent access (single process queue)
         self._lock = asyncio.Lock()
-        # Currently running process (for single-process model)
         self._current_process: Optional[asyncio.subprocess.Process] = None
-        # Current session being processed
         self._current_session_id: Optional[str] = None
 
     def get_or_create_session(
@@ -71,8 +70,6 @@ class SessionManager:
 
         Args:
             openbb_conversation_id: Optional conversation ID from OpenBB Copilot.
-                If provided and a session exists, returns the existing session.
-                If not provided, creates a new session without tracking.
 
         Returns:
             Session object with session_id and continuation flag.
@@ -83,7 +80,6 @@ class SessionManager:
             session.touch()
             return session
 
-        # Create new session
         session = Session(
             session_id=str(uuid.uuid4()),
             openbb_conversation_id=openbb_conversation_id,
@@ -117,7 +113,6 @@ class SessionManager:
         """
         if openbb_conversation_id in self._sessions:
             session = self._sessions[openbb_conversation_id]
-            # Remove from both mappings
             del self._sessions[openbb_conversation_id]
             if session.session_id in self._sessions_by_id:
                 del self._sessions_by_id[session.session_id]
@@ -145,6 +140,7 @@ class SessionManager:
             {
                 "session_id": s.session_id,
                 "openbb_conversation_id": s.openbb_conversation_id,
+                "opencode_session_id": s.opencode_session_id,
                 "created_at": s.created_at.isoformat(),
                 "last_active": s.last_active.isoformat(),
                 "is_continued": s.is_continued,
@@ -171,7 +167,7 @@ class SessionManager:
         process: Optional[asyncio.subprocess.Process],
         session_id: Optional[str] = None,
     ) -> None:
-        """Set the currently running Claude Code process.
+        """Set the currently running OpenCode process.
 
         Args:
             process: The subprocess, or None to clear.
@@ -181,7 +177,7 @@ class SessionManager:
         self._current_session_id = session_id
 
     def get_current_process(self) -> Optional[asyncio.subprocess.Process]:
-        """Get the currently running Claude Code process.
+        """Get the currently running OpenCode process.
 
         Returns:
             The current subprocess, or None if not running.
@@ -240,5 +236,4 @@ class SessionManager:
         return None
 
 
-# Global session manager instance
 session_manager = SessionManager()

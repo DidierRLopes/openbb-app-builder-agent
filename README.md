@@ -1,23 +1,19 @@
 # OpenBB App Builder Agent
 
-Demo here: [https://www.youtube.com/watch?v=zduIA_wmSEk](https://www.youtube.com/watch?v=zduIA_wmSEk)
-
-A FastAPI agent that bridges OpenBB Copilot with Claude Code CLI, enabling AI-powered generation of OpenBB Workspace backend apps.
-
-<img width="616" height="239" alt="CleanShot 2026-02-25 at 11 09 53" src="https://github.com/user-attachments/assets/f694396b-399e-4216-946f-59c14e0a6b74" />
+A FastAPI agent that bridges OpenBB Copilot with OpenCode CLI, enabling AI-powered generation of OpenBB Workspace backend apps.
 
 ## Features
 
 - Receives requirements from OpenBB Copilot UI
 - Extracts widget context and tool-result data from requests
-- Invokes Claude Code CLI to build complete FastAPI backends
+- Invokes OpenCode CLI to build complete FastAPI backends
 - Streams progress and results back to OpenBB Workspace
 - Creates timestamped app directories with conversation logs
 
 ## Prerequisites
 
 - Python 3.11+
-- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed and authenticated
+- [OpenCode CLI](https://opencode.ai) installed and configured
 - A target repository for generated apps (e.g., `backend-examples-for-openbb-workspace`)
 
 ## Installation
@@ -28,6 +24,8 @@ git clone https://github.com/OpenBB-finance/openbb-app-builder-agent.git
 cd openbb-app-builder-agent
 
 # Install dependencies
+pip install -e .
+# or with poetry
 poetry install
 ```
 
@@ -41,16 +39,18 @@ export OPENBB_APP_BUILDER_TARGET_REPO_PATH=/path/to/backend-examples-for-openbb-
 
 Optional environment variables:
 - `OPENBB_APP_BUILDER_HOST` - Server host (default: `0.0.0.0`)
-- `OPENBB_APP_BUILDER_PORT` - Server port (default: `7777`)
+- `OPENBB_APP_BUILDER_PORT` - Server port (default: `7778`)
 - `OPENBB_APP_BUILDER_LOG_LEVEL` - Log level (default: `INFO`)
+- `OPENBB_APP_BUILDER_OPENCODE_BINARY` - Path to OpenCode binary (auto-detected if not set)
+- `OPENBB_APP_BUILDER_OPENCODE_TIMEOUT` - Timeout in seconds (default: `600`)
 
 ## Running the Agent
 
 ```bash
-poetry run python -m openbb_app_builder_agent.main
+python -m openbb_app_builder_agent.main
 ```
 
-The agent will start on `http://localhost:7777` (or configured port).
+The agent will start on `http://localhost:7778` (or configured port).
 
 ## Connecting to OpenBB Workspace
 
@@ -60,7 +60,7 @@ The App Builder Agent is an **agent** (not a widget backend), so connect it via 
 
 1. Go to [OpenBB Workspace](https://pro.openbb.co)
 2. Navigate to **AI** in the sidebar
-3. Add the agent URL: `http://localhost:7777`
+3. Add the agent URL: `http://localhost:7778`
 4. The agent will appear as "OpenBB App Builder Agent"
 
 ### Step 2: Create Apps via Copilot
@@ -109,7 +109,7 @@ apps/my-app_20250223_1430/
 | `GET /health` | Health check with dependency status |
 | `GET /agents.json` | Agent configuration for OpenBB discovery |
 | `POST /v1/query` | Process queries from OpenBB Copilot |
-| `POST /v1/terminate` | Terminate running Claude process |
+| `POST /v1/terminate` | Terminate running OpenCode process |
 | `POST /v1/clear-sessions` | Clear session tracking data |
 | `GET /v1/sessions` | List active sessions (debug) |
 
@@ -117,22 +117,19 @@ apps/my-app_20250223_1430/
 
 ```bash
 # Run tests
-poetry run pytest -v
+pytest -v
 
-# Run the agent (RECOMMENDED)
-./run.sh
-
-# Or run directly
-poetry run python -m openbb_app_builder_agent.main
+# Run the agent
+python -m openbb_app_builder_agent.main
 ```
 
-**Warning:** Do NOT use `uvicorn --reload` - it will restart when Claude creates `.py` files in `apps/`, interrupting the generation process. Use `./run.sh` instead.
+**Warning:** Do NOT use `uvicorn --reload` - it will restart when OpenCode creates `.py` files in `apps/`, interrupting the generation process.
 
 ## Architecture
 
 ```
 ┌─────────────────┐     ┌──────────────────────┐     ┌─────────────┐
-│  OpenBB Copilot │────▶│  App Builder Agent   │────▶│ Claude Code │
+│  OpenBB Copilot │────▶│  App Builder Agent   │────▶│  OpenCode   │
 │       UI        │◀────│   (FastAPI + SSE)    │◀────│    CLI      │
 └─────────────────┘     └──────────────────────┘     └─────────────┘
                                    │
@@ -142,6 +139,21 @@ poetry run python -m openbb_app_builder_agent.main
                         │  (Generated Apps)    │
                         └──────────────────────┘
 ```
+
+## Migrating from Claude Code CLI
+
+This agent now uses OpenCode CLI instead of Claude Code CLI. Key differences:
+
+- **Model Selection**: OpenCode handles model selection via its own configuration (`~/.opencode.json`)
+- **Session Management**: OpenCode manages sessions natively
+- **No Browser Automation**: Browser automation features have been removed
+
+To configure OpenCode, run:
+```bash
+opencode auth login
+```
+
+Or edit `~/.opencode.json` to configure your preferred LLM provider.
 
 ## License
 

@@ -46,7 +46,7 @@ class TestHealthEndpoint:
         response = client.get("/health")
         data = response.json()
         assert "dependencies" in data
-        assert "claude_cli" in data["dependencies"]
+        assert "opencode_cli" in data["dependencies"]
         assert "target_repo" in data["dependencies"]
 
 
@@ -186,7 +186,6 @@ class TestQueryEndpoint:
     def test_query_single_message(self):
         """Query with single human message should be accepted."""
         payload = {"messages": [{"role": "human", "content": "Hello"}]}
-        # Use stream=True to avoid SSE event loop issues
         with client.stream("POST", "/v1/query", json=payload) as response:
             assert response.status_code == 200
             assert "text/event-stream" in response.headers.get("content-type", "")
@@ -211,7 +210,9 @@ class TestQueryWithFixtures:
             "message_with_primary_widget_and_tool_call.json",
         ],
     )
-    @pytest.mark.skip(reason="SSE event loop issues with TestClient - validated via request_parser tests")
+    @pytest.mark.skip(
+        reason="SSE event loop issues with TestClient - validated via request_parser tests"
+    )
     def test_fixture_payloads(self, fixture_name: str):
         """Test that fixture payloads are accepted.
 
@@ -226,7 +227,6 @@ class TestQueryWithFixtures:
         with open(fixture_path) as f:
             payload = json.load(f)
 
-        # Use stream=True to avoid SSE event loop issues
         with client.stream("POST", "/v1/query", json=payload) as response:
             assert response.status_code == 200
             assert "text/event-stream" in response.headers.get("content-type", "")

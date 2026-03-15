@@ -1,7 +1,7 @@
 """OpenBB App Builder Agent.
 
-A FastAPI server that bridges OpenBB Copilot with Claude Code CLI,
-enabling local app generation using .claude skills and reference backends.
+A FastAPI server that bridges OpenBB Copilot with OpenCode CLI,
+enabling local app generation using reference backends.
 """
 
 import logging
@@ -15,13 +15,12 @@ from openbb_ai import message_chunk, reasoning_step
 from openbb_ai.models import QueryRequest
 from sse_starlette.sse import EventSourceResponse
 
-from .claude_runner import ClaudeRunnerConfig, run_claude_code
-from .config import check_claude_installed, check_target_repo, settings
+from .config import check_opencode_installed, check_target_repo, settings
+from .opencode_runner import OpenCodeRunnerConfig, run_opencode
 from .prompt_builder import build_continuation_prompt, build_prompt
 from .request_parser import extract_conversation_id, parse_request
 from .session_manager import session_manager
 
-# Configure logging
 logging.basicConfig(
     level=getattr(logging, settings.log_level.upper()),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -32,11 +31,11 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan handler - check dependencies on startup."""
-    claude_ok, claude_msg = check_claude_installed()
-    if not claude_ok:
-        logger.warning(f"Claude CLI: {claude_msg}")
+    opencode_ok, opencode_msg = check_opencode_installed()
+    if not opencode_ok:
+        logger.warning(f"OpenCode CLI: {opencode_msg}")
     else:
-        logger.info(f"Claude CLI: {claude_msg}")
+        logger.info(f"OpenCode CLI: {opencode_msg}")
 
     repo_ok, repo_msg = check_target_repo()
     if not repo_ok:
@@ -49,12 +48,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="OpenBB App Builder Agent",
-    description="Builds OpenBB Workspace backend apps via Claude Code and local .claude skills",
-    version="0.1.0",
+    description="Builds OpenBB Workspace backend apps via OpenCode CLI",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
-# Enable CORS for OpenBB Pro/Workspace
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -67,14 +65,13 @@ app.add_middleware(
 @app.get("/health")
 def health() -> JSONResponse:
     """Health check with dependency status."""
-    claude_ok, claude_msg = check_claude_installed()
+    opencode_ok, opencode_msg = check_opencode_installed()
     repo_ok, repo_msg = check_target_repo()
 
-    # Determine overall status
-    if claude_ok and repo_ok:
+    if opencode_ok and repo_ok:
         status = "healthy"
-    elif claude_ok:
-        status = "degraded"  # Can run but no target repo
+    elif opencode_ok:
+        status = "degraded"
     else:
         status = "unhealthy"
 
@@ -83,7 +80,7 @@ def health() -> JSONResponse:
             "status": status,
             "service": "openbb-app-builder-agent",
             "dependencies": {
-                "claude_cli": {"available": claude_ok, "message": claude_msg},
+                "opencode_cli": {"available": opencode_ok, "message": opencode_msg},
                 "target_repo": {"available": repo_ok, "message": repo_msg},
             },
         }
@@ -98,11 +95,10 @@ def agents_json() -> JSONResponse:
             "openbb_app_builder_agent": {
                 "name": "OpenBB App Builder Agent",
                 "description": (
-                    "Build custom OpenBB Workspace backend apps using Claude Code CLI "
-                    "and local .claude skills. Supports widget context for data-driven "
-                    "app generation."
+                    "Build custom OpenBB Workspace backend apps using OpenCode CLI. "
+                    "Supports widget context for data-driven app generation."
                 ),
-                "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Anthropic_logo.svg/1280px-Anthropic_logo.svg.png",
+                "image": "https://opencode.ai/favicon.ico",
                 "endpoints": {"query": "/v1/query"},
                 "features": {
                     "streaming": True,
@@ -121,19 +117,18 @@ async def query(request: QueryRequest) -> EventSourceResponse:
     Receives the user's query, extracts widget/tool context,
     and streams responses back as SSE events.
     """
-    # Check Claude CLI availability
-    claude_ok, claude_msg = check_claude_installed()
-    if not claude_ok:
+    opencode_ok, opencode_msg = check_opencode_installed()
+    if not opencode_ok:
 
         async def error_response() -> AsyncGenerator[dict, None]:
             yield reasoning_step(
                 event_type="ERROR",
-                message="Claude Code CLI not installed",
-                details={"error": claude_msg},
+                message="OpenCode CLI not installed",
+                details={"error": opencode_msg},
             ).model_dump()
             yield message_chunk(
-                "Claude Code CLI is not installed. Please install it from: "
-                "https://docs.anthropic.com/en/docs/claude-code"
+                "OpenCode CLI is not installed. Please install it from: "
+                "https://opencode.ai"
             ).model_dump()
 
         return EventSourceResponse(
@@ -141,10 +136,8 @@ async def query(request: QueryRequest) -> EventSourceResponse:
             media_type="text/event-stream",
         )
 
-    # Parse request into normalized context
     context = parse_request(request)
 
-    # Check if we should execute (last message must be human)
     if not context.should_execute:
 
         async def skip_response() -> AsyncGenerator[dict, None]:
@@ -155,7 +148,6 @@ async def query(request: QueryRequest) -> EventSourceResponse:
             media_type="text/event-stream",
         )
 
-    # No user message
     if not context.user_message:
 
         async def empty_response() -> AsyncGenerator[dict, None]:
@@ -166,11 +158,9 @@ async def query(request: QueryRequest) -> EventSourceResponse:
             media_type="text/event-stream",
         )
 
-    # Get or create session
     conversation_id = extract_conversation_id(request)
     session = session_manager.get_or_create_session(conversation_id)
 
-    # Persist context for debugging/reproducibility
     session_manager.persist_context(session, context.to_dict())
 
     logger.info(
@@ -183,11 +173,11 @@ async def query(request: QueryRequest) -> EventSourceResponse:
     if settings.resolved_target_repo:
         logger.info(f"Target repo: {settings.resolved_target_repo}")
     else:
-        logger.warning("Target repo NOT configured - Claude will run in current directory")
+        logger.warning(
+            "Target repo NOT configured - OpenCode will run in current directory"
+        )
 
-    # Stream response
     async def execution_loop() -> AsyncGenerator[dict, None]:
-        # Emit session info
         yield reasoning_step(
             event_type="INFO",
             message="Session started",
@@ -197,7 +187,6 @@ async def query(request: QueryRequest) -> EventSourceResponse:
             },
         ).model_dump()
 
-        # Emit context info if present
         if context.has_widget_context():
             widget_names = [w.name for w in context.primary_widgets]
             yield reasoning_step(
@@ -215,7 +204,6 @@ async def query(request: QueryRequest) -> EventSourceResponse:
                 },
             ).model_dump()
 
-        # Check target repo
         repo_ok, repo_msg = check_target_repo()
         if not repo_ok:
             yield reasoning_step(
@@ -225,28 +213,24 @@ async def query(request: QueryRequest) -> EventSourceResponse:
             ).model_dump()
             yield message_chunk(
                 "**Note:** Target workspace repo is not configured. "
-                "Claude will run in current directory. "
+                "OpenCode will run in current directory. "
                 "Set `OPENBB_APP_BUILDER_TARGET_REPO_PATH` for full app building.\n\n"
             ).model_dump()
 
-        # Build prompt based on session state
         if session.is_continued:
             prompt = build_continuation_prompt(context)
         else:
             prompt = build_prompt(context, include_system=True)
 
-        # Configure Claude runner
-        runner_config = ClaudeRunnerConfig(
+        runner_config = OpenCodeRunnerConfig(
             working_directory=str(settings.resolved_target_repo)
             if settings.resolved_target_repo
             else None,
-            timeout=settings.claude_timeout,
-            skip_permissions=settings.claude_skip_permissions,
+            timeout=settings.opencode_timeout,
         )
 
-        # Execute Claude Code and stream results
-        async for event in run_claude_code(prompt, session, runner_config):
-            yield event.data
+        async for event in run_opencode(prompt, session, runner_config):
+            yield event
 
     return EventSourceResponse(
         content=execution_loop(),
@@ -256,7 +240,7 @@ async def query(request: QueryRequest) -> EventSourceResponse:
 
 @app.post("/v1/terminate")
 async def terminate() -> JSONResponse:
-    """Terminate any running Claude Code process."""
+    """Terminate any running OpenCode process."""
     was_terminated = await session_manager.terminate_current_process()
     return JSONResponse(
         content={
@@ -293,7 +277,6 @@ def list_sessions() -> JSONResponse:
 if __name__ == "__main__":
     import uvicorn
 
-    # NOTE: reload=False to prevent crashes when Claude creates files
     uvicorn.run(
         "openbb_app_builder_agent.main:app",
         host=settings.host,

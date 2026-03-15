@@ -9,3 +9,8 @@ build/
 dist/
 *.egg-info/
 .agent_sessions/
+
+# Agent configuration
+.agent/
+.opencode/
+.vscode/

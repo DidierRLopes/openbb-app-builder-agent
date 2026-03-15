@@ -10,23 +10,17 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Agent configuration settings."""
 
-    # Server settings
     host: str = "0.0.0.0"
     port: int = 7778
 
-    # Target workspace repo (where .claude skills live)
     target_repo_path: Optional[str] = None
 
-    # Session management
     session_dir: str = ".agent_sessions"
     session_ttl_hours: int = 24
 
-    # Claude CLI settings
-    claude_binary: Optional[str] = None
-    claude_timeout: float = 600.0  # 10 minutes for app builds
-    claude_skip_permissions: bool = True
+    opencode_binary: Optional[str] = None
+    opencode_timeout: float = 600.0
 
-    # Logging
     log_level: str = "INFO"
 
     model_config = {
@@ -52,35 +46,32 @@ class Settings(BaseSettings):
         return Path(self.session_dir).resolve()
 
 
-# Global settings instance
 settings = Settings()
 
 
-def find_claude_binary() -> Optional[str]:
-    """Find the Claude Code CLI binary.
+def find_opencode_binary() -> Optional[str]:
+    """Find the OpenCode CLI binary.
 
     Returns:
-        Path to claude binary if found, None otherwise.
+        Path to opencode binary if found, None otherwise.
     """
     import shutil
 
-    # Check configured path first
-    if settings.claude_binary:
-        if os.path.isfile(settings.claude_binary) and os.access(
-            settings.claude_binary, os.X_OK
+    if settings.opencode_binary:
+        if os.path.isfile(settings.opencode_binary) and os.access(
+            settings.opencode_binary, os.X_OK
         ):
-            return settings.claude_binary
+            return settings.opencode_binary
 
-    # Check if claude is in PATH
-    claude_path = shutil.which("claude")
-    if claude_path:
-        return claude_path
+    opencode_path = shutil.which("opencode")
+    if opencode_path:
+        return opencode_path
 
-    # Check common installation locations
     common_paths = [
-        os.path.expanduser("~/.claude/bin/claude"),
-        "/usr/local/bin/claude",
-        "/opt/homebrew/bin/claude",
+        os.path.expanduser("~/.local/bin/opencode"),
+        os.path.expanduser("~/go/bin/opencode"),
+        "/usr/local/bin/opencode",
+        "/opt/homebrew/bin/opencode",
     ]
 
     for path in common_paths:
@@ -90,18 +81,17 @@ def find_claude_binary() -> Optional[str]:
     return None
 
 
-def check_claude_installed() -> tuple[bool, str]:
-    """Check if Claude Code CLI is installed and accessible.
+def check_opencode_installed() -> tuple[bool, str]:
+    """Check if OpenCode CLI is installed and accessible.
 
     Returns:
         Tuple of (is_installed, message).
     """
-    binary = find_claude_binary()
+    binary = find_opencode_binary()
     if binary:
-        return True, f"Claude Code CLI found at: {binary}"
+        return True, f"OpenCode CLI found at: {binary}"
     return False, (
-        "Claude Code CLI not found. Please install it from: "
-        "https://docs.anthropic.com/en/docs/claude-code"
+        "OpenCode CLI not found. Please install it from: https://opencode.ai"
     )
 
 
@@ -112,14 +102,13 @@ def check_target_repo() -> tuple[bool, str]:
         Tuple of (exists, message).
     """
     if not settings.target_repo_path:
-        return False, "Target repo not configured (set OPENBB_APP_BUILDER_TARGET_REPO_PATH)"
+        return (
+            False,
+            "Target repo not configured (set OPENBB_APP_BUILDER_TARGET_REPO_PATH)",
+        )
 
     path = settings.resolved_target_repo
     if path and path.exists():
-        # Check for .claude directory
-        claude_dir = path / ".claude"
-        if claude_dir.exists():
-            return True, f"Target repo found at: {path} (with .claude skills)"
-        return True, f"Target repo found at: {path} (no .claude directory)"
+        return True, f"Target repo found at: {path}"
 
     return False, f"Target repo not found at: {settings.target_repo_path}"
