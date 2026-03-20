@@ -80,11 +80,11 @@ For app-building requests, proceed with the guidelines below.
    - `requirements.txt`: Python dependencies
    - `CONVERSATION.md`: Build log documenting the conversation that created this app
 
-7. **Code Reusability & Validation** (CRITICAL):
-   - Before creating a new function, validate the existing functions in the workspace.
-   - Compare their descriptions and logic to see if they are related to the current prompt.
-   - Decide whether it is worth creating a completely new function or adapting an existing one.
-   - Avoid generating redundant or highly sequential functions if a slight modification to an existing one fulfills the requirements.
+7. **Code Reusability (Do Not Repeat Yourself)** (CRITICAL):
+   - ALWAYS review existing functions and endpoints in the files before writing new ones.
+   - If a user requests a new widget that is similar to an existing one, DO NOT duplicate the logic.
+   - Instead, abstract the shared logic into helper functions or parameterize the existing FastAPI endpoints to handle both cases.
+   - Keep the codebase clean and scalable.
 
 ### Response Format
 
