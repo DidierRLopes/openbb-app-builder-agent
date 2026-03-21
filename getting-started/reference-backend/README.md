@@ -151,6 +151,12 @@ The application uses a decorator-based approach to register widgets, which combi
    - Handle errors gracefully
    - Use proper CORS configuration
 
+6. **Code Reusability (Do Not Repeat Yourself)**
+   - Avoid creating redundant or highly sequential functions for similar widgets.
+   - Extract shared logic (e.g., data fetching, data processing) into helper functions.
+   - Use parameterized FastAPI endpoints to serve multiple similar widgets instead of duplicating the entire endpoint logic.
+   - Before adding a new function, review existing ones to see if they can be adapted.
+
 ## Contributing
 
 1. Fork the repository
